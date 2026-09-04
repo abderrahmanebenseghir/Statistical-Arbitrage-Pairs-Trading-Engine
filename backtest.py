@@ -1,18 +1,8 @@
-"""
-===========================================================
-BACKTEST MODULE
-===========================================================
-"""
-
 import numpy as np
 import pandas as pd
 
 from config import Config
 
-
-# ==========================================================
-# BACKTEST ENGINE
-# ==========================================================
 
 def backtest_strategy(
     prices,
@@ -21,101 +11,64 @@ def backtest_strategy(
     hedge_ratios,
     signals,
 ):
+    """
+    Backtest the pairs strategy using daily close-to-close returns.
 
-    # ------------------------------------------------------
-    # Daily Returns
-    # ------------------------------------------------------
+    Signals are shifted by one day so that today's signal does not
+    receive today's return.
+    """
 
-    returns_a = prices[asset_a].pct_change().fillna(0)
+    returns_a = prices[asset_a].pct_change()
+    returns_b = prices[asset_b].pct_change()
 
-    returns_b = prices[asset_b].pct_change().fillna(0)
+    hedge = hedge_ratios.shift(1)
+    position = signals["Position"].shift(1)
 
-    # ------------------------------------------------------
-    # Normalize Gross Exposure
-    # ------------------------------------------------------
+    pair_return = returns_a - hedge * returns_b
 
-    gross_exposure = (
-        1 + hedge_ratios.abs()
-    ).replace(0, 1)
-
-    # ------------------------------------------------------
-    # Strategy Returns
-    # ------------------------------------------------------
+    exposure = 1 + hedge.abs()
+    exposure = exposure.replace(0, np.nan)
 
     strategy_returns = (
-        signals["Position"].shift(1).fillna(0)
-        * (
-            returns_a
-            - hedge_ratios.shift(1).fillna(0) * returns_b
-        )
+        position * pair_return / exposure
     )
 
-    strategy_returns = (
-        strategy_returns
-        / gross_exposure.shift(1).fillna(1)
-    )
+    strategy_returns = strategy_returns.replace(
+        [np.inf, -np.inf],
+        np.nan,
+    ).fillna(0)
 
-    # ------------------------------------------------------
-    # Remove Invalid Values
-    # ------------------------------------------------------
-
-    strategy_returns = (
-        strategy_returns
-        .replace([np.inf, -np.inf], 0)
-        .fillna(0)
-    )
-
-    # ------------------------------------------------------
-    # Prevent Impossible Returns
-    # ------------------------------------------------------
-
-    strategy_returns = strategy_returns.clip(
-        lower=-0.99,
-        upper=0.99,
-    )
-
-    # ------------------------------------------------------
-    # Trade Detection
-    # ------------------------------------------------------
-
-    trades = (
+    position_changes = (
         signals["Position"]
         .diff()
         .abs()
         .fillna(0)
     )
 
-    # ------------------------------------------------------
-    # Transaction Costs
-    # ------------------------------------------------------
-
-    strategy_returns -= (
-        trades * Config.TRANSACTION_COST
+    trading_costs = (
+        position_changes * Config.TRANSACTION_COST
     )
 
-    # ------------------------------------------------------
-    # Portfolio
-    # ------------------------------------------------------
+    strategy_returns = strategy_returns - trading_costs
 
-    portfolio = pd.DataFrame(index=prices.index)
-
-    portfolio["Position"] = signals["Position"]
-
-    portfolio["Strategy Return"] = strategy_returns
-
-    portfolio["Equity"] = (
+    equity = (
         Config.INITIAL_CAPITAL
         * (1 + strategy_returns).cumprod()
     )
 
-    portfolio["Daily PnL"] = (
-        portfolio["Equity"].diff().fillna(0)
-    )
+    portfolio = pd.DataFrame(index=prices.index)
 
-    portfolio["Trades"] = trades
+    portfolio["Position"] = signals["Position"]
+    portfolio["Strategy Return"] = strategy_returns
+    portfolio["Trading Cost"] = trading_costs
+    portfolio["Equity"] = equity
+
+    portfolio["Daily PnL"] = equity.diff().fillna(0)
+
+    portfolio["Position Change"] = position_changes
 
     portfolio["Cumulative Return"] = (
-        portfolio["Equity"] / Config.INITIAL_CAPITAL - 1
-    )
+        equity / Config.INITIAL_CAPITAL
+    ) - 1
 
     return portfolio
