@@ -1,55 +1,42 @@
-# Statistical Arbitrage Pairs Trading Engine
+# Statistical Arbitrage Pairs Trading
 
-A professional quantitative trading engine written in Python that implements a **Statistical Arbitrage (Pairs Trading)** strategy using **cointegration** and **mean reversion**.
+A Python research project exploring a simple statistical arbitrage strategy based on
+cointegration and mean reversion.
 
-The engine automatically identifies cointegrated asset pairs, estimates dynamic hedge ratios using rolling Ordinary Least Squares (OLS), generates trading signals through rolling Z-Scores, backtests the strategy with transaction costs, evaluates performance using professional risk metrics, and exports reports and visualizations.
+The project downloads historical market data, searches for potentially cointegrated
+asset pairs, estimates a rolling hedge ratio, calculates the spread and its z-score,
+generates trading signals, and evaluates the strategy through a historical backtest.
 
-This project was developed as a quantitative finance portfolio project and serves as the foundation for the future **QuantLab** quantitative research framework.
+## What I wanted to explore
 
----
+The main question behind the project was:
 
-# Features
+> Can two assets that historically move together be traded when their relationship
+> temporarily moves away from its usual level?
 
-- Live market data from Yahoo Finance
-- Automatic pair discovery
-- Engle-Granger cointegration testing
-- Dynamic rolling hedge ratio (OLS)
-- Rolling Z-Score calculation
-- Mean reversion trading strategy
-- Transaction cost modeling
-- Professional backtesting engine
-- Portfolio equity tracking
-- Performance analytics
-- Parameter optimization (Grid Search)
-- Trade log export (CSV)
-- Optimization report (CSV)
-- Professional visualizations
-- Modular Python architecture
+The strategy treats large deviations in the spread as potential mean-reversion
+opportunities.
 
----
+## Strategy
 
-# Methodology
+The research pipeline is:
 
-The strategy follows the workflow below:
+1. Download historical price data.
+2. Test possible asset pairs for cointegration.
+3. Select a statistically significant pair.
+4. Estimate a rolling hedge ratio using OLS.
+5. Construct the spread.
+6. Calculate a rolling z-score.
+7. Generate long/short signals from the z-score.
+8. Backtest the strategy using historical returns.
+9. Include transaction costs.
+10. Calculate performance statistics.
+11. Test different entry and exit thresholds.
 
-1. Download historical market data.
-2. Identify cointegrated asset pairs using the Engle-Granger test.
-3. Estimate a rolling hedge ratio using Ordinary Least Squares (OLS).
-4. Construct the spread between the two assets.
-5. Compute the rolling Z-Score.
-6. Generate entry and exit signals.
-7. Backtest the strategy with transaction costs.
-8. Evaluate performance using professional risk-adjusted metrics.
-9. Optimize strategy parameters using Grid Search.
+## Project Structure
 
----
-
-# Project Structure
-
-```
-QuantFinanceProjects/
-
-│
+```text
+.
 ├── main.py
 ├── config.py
 ├── data.py
@@ -59,91 +46,7 @@ QuantFinanceProjects/
 ├── performance.py
 ├── optimization.py
 ├── plots.py
+├── requirements.txt
 │
 ├── results/
-│   ├── Trade_Log.csv
-│   └── Optimization.csv
-│
 └── charts/
-```
-
----
-
-# Technologies
-
-- Python
-- Pandas
-- NumPy
-- Statsmodels
-- SciPy
-- Matplotlib
-- Seaborn
-- yfinance
-
----
-
-# Installation
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-# Run
-
-```bash
-python main.py
-```
-
----
-
-# Outputs
-
-The engine automatically generates:
-
-- Portfolio Equity Curve
-- Spread Visualization
-- Rolling Z-Score Chart
-- Performance Statistics
-- Trade Log (CSV)
-- Parameter Optimization Report (CSV)
-
-Performance metrics include:
-
-- Total Return
-- Annual Return
-- Annual Volatility
-- Sharpe Ratio
-- Calmar Ratio
-- Profit Factor
-- Maximum Drawdown
-- Win Rate
-
----
-
-# Future Improvements
-
-- Multi-pair portfolio management
-- Walk-forward optimization
-- Bayesian optimization
-- Monte Carlo simulation
-- Kalman Filter hedge ratio estimation
-- Advanced portfolio risk management
-- Slippage and market impact modeling
-- Machine Learning signal generation
-- Interactive dashboard
-
----
-
-# License
-
-This project is released under the **MIT License**.
-
----
-
-# Author
-
-**Abderrahmane**
-
-Aspiring Quantitative Researcher | Quantitative Finance | Python | Algorithmic Trading
