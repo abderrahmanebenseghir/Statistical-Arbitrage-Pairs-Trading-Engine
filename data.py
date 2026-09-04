@@ -1,38 +1,36 @@
-"""
-===========================================================
-DATA MODULE
-===========================================================
-"""
-
-import pandas as pd
+""import pandas as pd
 import yfinance as yf
 
 from config import Config
 
 
 def download_data():
-
-    print("=" * 60)
-    print("DOWNLOADING MARKET DATA")
-    print("=" * 60)
+    """Download adjusted historical prices for the selected assets."""
 
     data = yf.download(
         Config.TICKERS,
         start=Config.START_DATE,
         end=Config.END_DATE,
         auto_adjust=True,
-        progress=True,
+        progress=False,
     )
 
+    if data.empty:
+        raise ValueError("No market data was returned.")
+
     if isinstance(data.columns, pd.MultiIndex):
-        prices = data["Close"]
+        prices = data["Close"].copy()
     else:
-        prices = data
+        prices = data[["Close"]].copy()
+        prices.columns = [Config.TICKERS[0]]
 
-    prices = prices.ffill().bfill()
+    prices = prices.sort_index()
+    prices = prices.ffill()
 
-    print("Download Complete.")
-    print(f"Rows    : {prices.shape[0]}")
-    print(f"Assets  : {prices.shape[1]}")
+    # Remove rows where we still do not have enough information.
+    prices = prices.dropna(how="all")
+
+    if prices.empty:
+        raise ValueError("Price data is empty after cleaning.")
 
     return prices
