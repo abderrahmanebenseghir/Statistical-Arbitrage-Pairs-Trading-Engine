@@ -1,9 +1,3 @@
-"""
-===========================================================
-PLOTTING MODULE
-===========================================================
-"""
-
 import matplotlib.pyplot as plt
 
 
@@ -13,103 +7,69 @@ def plot_results(
     zscore,
     portfolio,
     asset_a,
-    asset_b
+    asset_b,
 ):
+    """Create the main charts for the strategy."""
 
-    plt.style.use("ggplot")
+    fig, axes = plt.subplots(
+        4,
+        1,
+        figsize=(14, 12),
+        sharex=True,
+    )
 
-    fig = plt.figure(figsize=(16, 14))
-
-    # -------------------------
-    # Asset Prices
-    # -------------------------
-
-    ax1 = plt.subplot(4, 1, 1)
-
-    ax1.plot(
+    axes[0].plot(
         prices.index,
         prices[asset_a],
-        label=asset_a
+        label=asset_a,
     )
 
-    ax1.plot(
+    axes[0].plot(
         prices.index,
         prices[asset_b],
-        label=asset_b
+        label=asset_b,
     )
 
-    ax1.set_title("Asset Prices")
+    axes[0].set_title("Asset Prices")
+    axes[0].legend()
 
-    ax1.legend()
-
-    # -------------------------
-    # Spread
-    # -------------------------
-
-    ax2 = plt.subplot(4, 1, 2)
-
-    ax2.plot(
+    axes[1].plot(
         spread.index,
         spread,
-        label="Spread"
+        label="Spread",
     )
 
-    ax2.set_title("Spread")
+    axes[1].set_title("Trading Spread")
+    axes[1].legend()
 
-    ax2.legend()
-
-    # -------------------------
-    # Z-Score
-    # -------------------------
-
-    ax3 = plt.subplot(4, 1, 3)
-
-    ax3.plot(
+    axes[2].plot(
         zscore.index,
         zscore,
-        label="Z-Score"
+        label="Z-Score",
     )
 
-    ax3.axhline(
-        2,
-        linestyle="--"
-    )
+    axes[2].axhline(2, linestyle="--")
+    axes[2].axhline(-2, linestyle="--")
+    axes[2].axhline(0)
 
-    ax3.axhline(
-        -2,
-        linestyle="--"
-    )
+    axes[2].set_title("Spread Z-Score")
+    axes[2].legend()
 
-    ax3.axhline(
-        0,
-        linestyle="-"
-    )
-
-    ax3.set_title("Rolling Z-Score")
-
-    ax3.legend()
-
-    # -------------------------
-    # Equity Curve
-    # -------------------------
-
-    ax4 = plt.subplot(4, 1, 4)
-
-    ax4.plot(
+    axes[3].plot(
         portfolio.index,
         portfolio["Equity"],
-        label="Portfolio"
+        label="Portfolio",
     )
 
-    ax4.set_title("Portfolio Equity")
-
-    ax4.legend()
+    axes[3].set_title("Portfolio Equity")
+    axes[3].legend()
 
     plt.tight_layout()
 
     plt.savefig(
         "charts/Portfolio_Report.png",
-        dpi=300
+        dpi=300,
+        bbox_inches="tight",
     )
 
     plt.show()
