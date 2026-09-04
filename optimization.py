@@ -1,43 +1,41 @@
-"""
-===========================================================
-PARAMETER OPTIMIZATION MODULE
-===========================================================
-"""
-
 import numpy as np
 import pandas as pd
 
-from strategy import (
-    calculate_zscore,
-    generate_signals,
-)
-
 from backtest import backtest_strategy
+from strategy import generate_signals
 
 
-# ==========================================================
-# GRID SEARCH OPTIMIZATION
-# ==========================================================
+def calculate_sharpe(returns):
+    """Annualized Sharpe ratio based on daily returns."""
+
+    volatility = returns.std()
+
+    if volatility == 0:
+        return 0
+
+    return (
+        returns.mean() / volatility
+    ) * np.sqrt(252)
+
 
 def optimize_parameters(
     prices,
     asset_a,
     asset_b,
-    spread,
     hedge_ratios,
+    zscore,
 ):
+    """
+    Test several entry and exit thresholds.
 
-    print("\n========================================")
-    print("PARAMETER OPTIMIZATION")
-    print("========================================")
+    This is a simple in-sample grid search. It should not be treated
+    as out-of-sample validation.
+    """
 
     entry_values = [1.5, 2.0, 2.5, 3.0]
-
     exit_values = [0.25, 0.50, 0.75, 1.00]
 
-    optimization_results = []
-
-    zscore = calculate_zscore(spread)
+    results = []
 
     for entry in entry_values:
 
@@ -58,69 +56,36 @@ def optimize_parameters(
             )
 
             returns = portfolio["Strategy Return"]
-
             equity = portfolio["Equity"]
 
             total_return = (
-                equity.iloc[-1] / equity.iloc[0]
+                equity.iloc[-1]
+                / equity.iloc[0]
             ) - 1
 
-            volatility = (
-                returns.std()
-                * np.sqrt(252)
-            )
+            sharpe = calculate_sharpe(returns)
 
-            if returns.std() != 0:
-
-                sharpe = (
-                    returns.mean()
-                    / returns.std()
-                ) * np.sqrt(252)
-
-            else:
-
-                sharpe = 0
-
-            running_max = equity.cummax()
+            running_high = equity.cummax()
 
             drawdown = (
-                equity - running_max
-            ) / running_max
+                equity / running_high
+            ) - 1
 
             max_drawdown = drawdown.min()
 
-            optimization_results.append(
+            results.append(
                 {
-                    "Entry": entry,
-                    "Exit": exit,
+                    "Entry Z": entry,
+                    "Exit Z": exit,
                     "Total Return": total_return,
                     "Sharpe": sharpe,
                     "Max Drawdown": max_drawdown,
                 }
             )
 
-    optimization_results = pd.DataFrame(
-        optimization_results
-    )
+    results = pd.DataFrame(results)
 
-    optimization_results = (
-        optimization_results
-        .sort_values(
-            "Sharpe",
-            ascending=False,
-        )
-        .reset_index(drop=True)
-    )
-
-    print("\n==============================")
-    print("TOP PARAMETER COMBINATIONS")
-    print("==============================")
-
-    print(optimization_results.head(10))
-
-    optimization_results.to_csv(
-        "results/Optimization.csv",
-        index=False,
-    )
-
-    return optimization_results
+    return results.sort_values(
+        "Sharpe",
+        ascending=False,
+    ).reset_index(drop=True)
