@@ -1,184 +1,120 @@
-"""
-===========================================================
-PERFORMANCE MODULE
-===========================================================
-"""
-
 import numpy as np
 import pandas as pd
 
 
-# ==========================================================
-# PERFORMANCE METRICS
-# ==========================================================
-
 def performance_metrics(portfolio):
+    """Calculate the main performance statistics."""
 
     returns = portfolio["Strategy Return"]
-
     equity = portfolio["Equity"]
 
     total_return = (
         equity.iloc[-1] / equity.iloc[0]
     ) - 1
 
-    annual_return = (
-        (equity.iloc[-1] / equity.iloc[0])
-        ** (252 / len(equity))
-        - 1
-    )
+    number_of_days = len(equity)
 
-    annual_volatility = (
-        returns.std()
-        * np.sqrt(252)
-    )
+    years = number_of_days / 252
 
-    # --------------------------------------
-    # Sharpe Ratio
-    # --------------------------------------
+    if years > 0:
+        annual_return = (
+            (equity.iloc[-1] / equity.iloc[0])
+            ** (1 / years)
+        ) - 1
+    else:
+        annual_return = 0
 
-    if returns.std() != 0:
+    annual_volatility = returns.std() * np.sqrt(252)
 
+    if returns.std() > 0:
         sharpe = (
             returns.mean()
             / returns.std()
         ) * np.sqrt(252)
-
     else:
-
         sharpe = 0
 
-    # --------------------------------------
-    # Drawdown
-    # --------------------------------------
-
-    running_max = equity.cummax()
+    running_high = equity.cummax()
 
     drawdown = (
-        equity - running_max
-    ) / running_max
+        equity / running_high
+    ) - 1
 
     max_drawdown = drawdown.min()
 
-    # --------------------------------------
-    # Trades
-    # --------------------------------------
-
-    total_trades = int(
-        portfolio["Trades"].sum()
-    )
-
-    # --------------------------------------
-    # Win Rate
-    # --------------------------------------
-
-    winning_days = (returns > 0).sum()
-
-    losing_days = (returns < 0).sum()
-
-    total_days = winning_days + losing_days
-
-    if total_days > 0:
-
-        win_rate = winning_days / total_days
-
+    if max_drawdown < 0:
+        calmar = annual_return / abs(max_drawdown)
     else:
+        calmar = np.nan
 
-        win_rate = 0
-
-    # --------------------------------------
-    # Profit Factor
-    # --------------------------------------
-
-    gross_profit = returns[
-        returns > 0
-    ].sum()
+    gross_profit = returns[returns > 0].sum()
 
     gross_loss = abs(
-        returns[
-            returns < 0
-        ].sum()
+        returns[returns < 0].sum()
     )
 
-    if gross_loss != 0:
-
-        profit_factor = (
-            gross_profit / gross_loss
-        )
-
+    if gross_loss > 0:
+        profit_factor = gross_profit / gross_loss
     else:
+        profit_factor = np.nan
 
-        profit_factor = np.inf
+    trades = int(
+        portfolio["Position Change"].sum()
+    )
 
-    # --------------------------------------
-    # Calmar Ratio
-    # --------------------------------------
-
-    if max_drawdown != 0:
-
-        calmar = (
-            annual_return
-            / abs(max_drawdown)
-        )
-
-    else:
-
-        calmar = np.inf
-
-    print("\n==============================")
-    print("PERFORMANCE")
-    print("==============================")
-    print(f"Total Return     : {total_return:.2%}")
-    print(f"Annual Return    : {annual_return:.2%}")
-    print(f"Volatility       : {annual_volatility:.2%}")
-    print(f"Sharpe Ratio     : {sharpe:.2f}")
-    print(f"Calmar Ratio     : {calmar:.2f}")
-    print(f"Profit Factor    : {profit_factor:.2f}")
-    print(f"Max Drawdown     : {max_drawdown:.2%}")
-    print(f"Trades Executed  : {total_trades}")
-    print(f"Win Rate         : {win_rate:.2%}")
-
-    return {
+    results = {
         "Total Return": total_return,
         "Annual Return": annual_return,
-        "Volatility": annual_volatility,
-        "Sharpe": sharpe,
-        "Calmar": calmar,
+        "Annual Volatility": annual_volatility,
+        "Sharpe Ratio": sharpe,
+        "Calmar Ratio": calmar,
         "Profit Factor": profit_factor,
-        "Max Drawdown": max_drawdown,
-        "Trades": total_trades,
-        "Win Rate": win_rate,
+        "Maximum Drawdown": max_drawdown,
+        "Position Changes": trades,
     }
 
+    return results
 
-# ==========================================================
-# TRADE LOG
-# ==========================================================
 
-def create_trade_log(portfolio, signals):
+def print_performance(results):
+    """Print the performance results in a readable format."""
 
-    trades = pd.DataFrame(index=portfolio.index)
+    print("\nPerformance")
+    print("-" * 30)
 
-    trades["Position"] = signals["Position"]
+    for name, value in results.items():
 
-    trades["Trade"] = (
-        trades["Position"]
-        .diff()
-    )
+        if "Return" in name or "Volatility" in name:
+            print(f"{name}: {value:.2%}")
 
-    trade_log = trades[
-        trades["Trade"] != 0
+        elif "Drawdown" in name:
+            print(f"{name}: {value:.2%}")
+
+        elif "Ratio" in name or "Factor" in name:
+            print(f"{name}: {value:.2f}")
+
+        else:
+            print(f"{name}: {value}")
+
+
+def create_trade_log(portfolio):
+    """Return dates where the position changed."""
+
+    changes = portfolio[
+        portfolio["Position Change"] > 0
     ].copy()
 
-    trade_log["Action"] = np.where(
-        trade_log["Trade"] > 0,
-        "BUY",
-        "SELL"
+    if changes.empty:
+        return pd.DataFrame(
+            columns=["Position", "Action"]
+        )
+
+    changes["Action"] = np.where(
+        changes["Position"] > 0,
+        "LONG",
+        "SHORT",
     )
 
-    trade_log.drop(
-        columns=["Trade"],
-        inplace=True
-    )
-
-    return trade_log
+    return changes[
+        ["Position", "Action"]
+    ]
