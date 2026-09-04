@@ -1,65 +1,55 @@
-"""
-===========================================================
-STATISTICAL ARBITRAGE PAIRS TRADING ENGINE
-MAIN PROGRAM
-===========================================================
-"""
+from pathlib import Path
 
-import warnings
-
-warnings.filterwarnings("ignore")
-
-from data import download_data
-
+from backtest import backtest_strategy
 from cointegration import (
     find_cointegrated_pairs,
     select_best_pair,
 )
-
+from data import download_data
+from optimization import optimize_parameters
+from performance import (
+    create_trade_log,
+    performance_metrics,
+    print_performance,
+)
+from plots import plot_results
 from strategy import (
     calculate_dynamic_spread,
     calculate_zscore,
     generate_signals,
 )
 
-from backtest import backtest_strategy
-
-from performance import (
-    performance_metrics,
-    create_trade_log,
-)
-
-from plots import plot_results
-
-from optimization import optimize_parameters
-
 
 def main():
 
-    print("=" * 60)
-    print("STATISTICAL ARBITRAGE ENGINE")
-    print("=" * 60)
+    Path("results").mkdir(exist_ok=True)
+    Path("charts").mkdir(exist_ok=True)
 
-    # -----------------------------------
-    # Download Data
-    # -----------------------------------
+    print("\nPairs Trading Research Project")
+    print("=" * 40)
 
     prices = download_data()
 
-    print("\nFirst Five Rows:\n")
-    print(prices.head())
+    print(
+        f"Downloaded {len(prices)} observations "
+        f"for {len(prices.columns)} assets."
+    )
 
-    # -----------------------------------
-    # Cointegration
-    # -----------------------------------
+    print("\nFinding candidate pairs...")
 
-    results = find_cointegrated_pairs(prices)
+    pair_results = find_cointegrated_pairs(prices)
 
-    asset_a, asset_b = select_best_pair(results)
+    if pair_results.empty:
+        raise ValueError("No candidate pairs were found.")
 
-    # -----------------------------------
-    # Strategy
-    # -----------------------------------
+    pair_results.to_csv(
+        "results/Cointegration.csv",
+        index=False,
+    )
+
+    asset_a, asset_b = select_best_pair(
+        pair_results
+    )
 
     spread, hedge_ratios = calculate_dynamic_spread(
         prices,
@@ -71,10 +61,6 @@ def main():
 
     signals = generate_signals(zscore)
 
-    # -----------------------------------
-    # Backtest
-    # -----------------------------------
-
     portfolio = backtest_strategy(
         prices,
         asset_a,
@@ -83,55 +69,35 @@ def main():
         signals,
     )
 
-    # -----------------------------------
-    # Performance
-    # -----------------------------------
+    results = performance_metrics(portfolio)
 
-    performance_metrics(portfolio)
+    print_performance(results)
 
-    # -----------------------------------
-    # Parameter Optimization
-    # -----------------------------------
+    print("\nTesting strategy parameters...")
 
-    optimization_results = optimize_parameters(
+    optimization = optimize_parameters(
         prices,
         asset_a,
         asset_b,
-        spread,
         hedge_ratios,
+        zscore,
     )
 
-    print("\n==============================")
-    print("BEST PARAMETERS")
-    print("==============================")
+    optimization.to_csv(
+        "results/Optimization.csv",
+        index=False,
+    )
 
-    print(optimization_results.head())
-
-    # -----------------------------------
-    # Trade Log
-    # -----------------------------------
+    print("\nBest parameter combinations:")
+    print(optimization.head())
 
     trade_log = create_trade_log(
-        portfolio,
-        signals,
+        portfolio
     )
-
-    print("\n==============================")
-    print("TRADE LOG")
-    print("==============================")
-
-    print(trade_log.head(20))
 
     trade_log.to_csv(
-        "results/Trade_Log.csv",
-        index=True,
+        "results/Trade_Log.csv"
     )
-
-    print("\nTrade log exported successfully!")
-
-    # -----------------------------------
-    # Charts
-    # -----------------------------------
 
     plot_results(
         prices,
@@ -142,9 +108,9 @@ def main():
         asset_b,
     )
 
-    print("\n==============================")
-    print("PROJECT COMPLETED")
-    print("==============================")
+    print("\nResults saved to:")
+    print("  results/")
+    print("  charts/")
 
 
 if __name__ == "__main__":
