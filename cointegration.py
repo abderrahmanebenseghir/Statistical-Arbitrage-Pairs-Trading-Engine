@@ -1,98 +1,96 @@
-"""
-===========================================================
-COINTEGRATION MODULE
-===========================================================
-"""
-
 from itertools import combinations
 
 import pandas as pd
 from statsmodels.tsa.stattools import coint
 
+from config import Config
 
-# ==========================================================
-# FIND COINTEGRATED PAIRS
-# ==========================================================
 
 def find_cointegrated_pairs(prices):
+    """
+    Test every possible pair using the Engle-Granger test.
 
-    print("\nSearching for cointegrated pairs...\n")
-
-    assets = prices.columns
+    Pairs with a strong enough correlation and a statistically
+    significant cointegration test are kept.
+    """
 
     results = []
 
-    for asset_a, asset_b in combinations(assets, 2):
+    for asset_a, asset_b in combinations(prices.columns, 2):
+        pair = prices[[asset_a, asset_b]].dropna()
+
+        if len(pair) < Config.ROLLING_WINDOW:
+            continue
+
+        correlation = pair[asset_a].corr(pair[asset_b])
+
+        if abs(correlation) < Config.MIN_CORRELATION:
+            continue
 
         try:
-
-            score, pvalue, _ = coint(
-                prices[asset_a],
-                prices[asset_b],
+            test_stat, p_value, _ = coint(
+                pair[asset_a],
+                pair[asset_b],
             )
-
-            corr = prices[asset_a].corr(
-                prices[asset_b]
-            )
-
-            results.append(
-                {
-                    "Asset A": asset_a,
-                    "Asset B": asset_b,
-                    "Correlation": corr,
-                    "P-Value": pvalue,
-                    "Test Statistic": score,
-                }
-            )
-
         except Exception:
             continue
 
+        results.append(
+            {
+                "Asset A": asset_a,
+                "Asset B": asset_b,
+                "Correlation": correlation,
+                "Test Statistic": test_stat,
+                "P-Value": p_value,
+            }
+        )
+
+    if not results:
+        return pd.DataFrame(
+            columns=[
+                "Asset A",
+                "Asset B",
+                "Correlation",
+                "Test Statistic",
+                "P-Value",
+            ]
+        )
+
     results = pd.DataFrame(results)
 
-    # ------------------------------------------------------
-    # Keep only highly correlated pairs
-    # ------------------------------------------------------
-
-    if not results.empty:
-
-        results = results[
-            results["Correlation"].abs() >= 0.70
-        ]
-
-        results = (
-            results
-            .sort_values("P-Value")
-            .reset_index(drop=True)
-        )
+    results = results.sort_values("P-Value").reset_index(drop=True)
 
     return results
 
 
-# ==========================================================
-# SELECT BEST PAIR
-# ==========================================================
-
 def select_best_pair(results):
+    """Return the pair with the strongest cointegration result."""
 
     if results.empty:
-
         raise ValueError(
-            "No suitable cointegrated pair was found. "
-            "Try lowering the minimum correlation threshold."
+            "No suitable pair was found. "
+            "Try changing the correlation or p-value thresholds."
         )
 
-    best = results.iloc[0]
+    significant = results[
+        results["P-Value"] <= Config.MAX_COINT_PVALUE
+    ]
+
+    if significant.empty:
+        raise ValueError(
+            "No pair passed the cointegration significance threshold."
+        )
+
+    best = significant.iloc[0]
 
     asset_a = best["Asset A"]
     asset_b = best["Asset B"]
 
-    print("\n==============================")
-    print("BEST PAIR FOUND")
-    print("==============================")
-    print(f"Asset A      : {asset_a}")
-    print(f"Asset B      : {asset_b}")
-    print(f"P-Value      : {best['P-Value']:.6f}")
-    print(f"Correlation  : {best['Correlation']:.4f}")
+    print("\nBest pair")
+    print("-" * 30)
+    print(f"Asset A: {asset_a}")
+    print(f"Asset B: {asset_b}")
+    print(f"Correlation: {best['Correlation']:.3f}")
+    print(f"P-value: {best['P-Value']:.5f}")
 
     return asset_a, asset_b
