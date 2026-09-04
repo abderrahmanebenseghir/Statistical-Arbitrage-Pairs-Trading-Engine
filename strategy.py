@@ -1,9 +1,3 @@
-"""
-===========================================================
-STRATEGY MODULE
-===========================================================
-"""
-
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -11,31 +5,36 @@ import statsmodels.api as sm
 from config import Config
 
 
-# ==========================================================
-# DYNAMIC HEDGE RATIO
-# ==========================================================
-
 def calculate_dynamic_spread(prices, asset_a, asset_b):
+    """
+    Estimate a rolling hedge ratio and use it to construct the spread.
 
-    hedge_ratios = []
+    The regression is:
 
-    spreads = []
+        asset_a = alpha + beta * asset_b + error
 
-    index = prices.index
+    The residual component is used as the trading spread.
+    """
 
     window = Config.ROLLING_WINDOW
 
-    for i in range(len(prices)):
+    hedge_ratios = pd.Series(
+        index=prices.index,
+        dtype=float,
+        name="Hedge Ratio",
+    )
 
-        if i < window:
+    spread = pd.Series(
+        index=prices.index,
+        dtype=float,
+        name="Spread",
+    )
 
-            hedge_ratios.append(np.nan)
-            spreads.append(np.nan)
-            continue
+    for end in range(window, len(prices) + 1):
+        start = end - window
 
-        y = prices[asset_a].iloc[i - window:i]
-
-        x = prices[asset_b].iloc[i - window:i]
+        y = prices[asset_a].iloc[start:end]
+        x = prices[asset_b].iloc[start:end]
 
         x = sm.add_constant(x)
 
@@ -43,101 +42,81 @@ def calculate_dynamic_spread(prices, asset_a, asset_b):
 
         beta = model.params.iloc[1]
 
-        hedge_ratios.append(beta)
+        current_date = prices.index[end - 1]
 
-        spread = (
-            prices[asset_a].iloc[i]
-            - beta * prices[asset_b].iloc[i]
+        hedge_ratios.loc[current_date] = beta
+
+        spread.loc[current_date] = (
+            prices[asset_a].loc[current_date]
+            - beta * prices[asset_b].loc[current_date]
         )
 
-        spreads.append(spread)
+    return spread, hedge_ratios
 
-    hedge_ratios = pd.Series(
-        hedge_ratios,
-        index=index,
-        name="Beta"
-    )
-
-    spreads = pd.Series(
-        spreads,
-        index=index,
-        name="Spread"
-    )
-
-    print("\nDynamic hedge ratio created.")
-
-    return spreads, hedge_ratios
-
-
-# ==========================================================
-# ROLLING Z-SCORE
-# ==========================================================
 
 def calculate_zscore(spread):
+    """Calculate the rolling z-score of the trading spread."""
 
-    rolling_mean = spread.rolling(
-        Config.ROLLING_WINDOW
-    ).mean()
+    window = Config.ROLLING_WINDOW
 
-    rolling_std = (
-        spread
-        .rolling(Config.ROLLING_WINDOW)
-        .std()
-        .replace(0, np.nan)
-    )
+    mean = spread.rolling(window).mean()
+    std = spread.rolling(window).std()
 
-    zscore = (
-        spread - rolling_mean
-    ) / rolling_std
+    std = std.replace(0, np.nan)
 
-    zscore = (
-        zscore
-        .replace([np.inf, -np.inf], np.nan)
-        .fillna(0)
-    )
+    return (spread - mean) / std
 
-    return zscore
-
-
-# ==========================================================
-# SIGNAL GENERATION
-# ==========================================================
 
 def generate_signals(
     zscore,
     entry=Config.ENTRY_Z,
     exit=Config.EXIT_Z,
 ):
+    """
+    Create positions from the spread z-score.
+
+    +1 = long the spread
+    -1 = short the spread
+     0 = flat
+    """
+
+    position = pd.Series(
+        index=zscore.index,
+        dtype=float,
+        name="Position",
+    )
+
+    current_position = 0
+
+    for date, value in zscore.items():
+
+        if pd.isna(value):
+            position.loc[date] = 0
+            continue
+
+        if current_position == 0:
+
+            if value <= -entry:
+                current_position = 1
+
+            elif value >= entry:
+                current_position = -1
+
+        elif current_position == 1:
+
+            if value >= -exit:
+                current_position = 0
+
+        elif current_position == -1:
+
+            if value <= exit:
+                current_position = 0
+
+        position.loc[date] = current_position
 
     signals = pd.DataFrame(index=zscore.index)
 
     signals["Z-Score"] = zscore
-
-    signals["Position"] = 0
-
-    # Long Spread
-    signals.loc[
-        zscore < -entry,
-        "Position"
-    ] = 1
-
-    # Short Spread
-    signals.loc[
-        zscore > entry,
-        "Position"
-    ] = -1
-
-    # Exit
-    signals.loc[
-        zscore.abs() < exit,
-        "Position"
-    ] = 0
-
-    signals["Position"] = (
-        signals["Position"]
-        .replace(0, np.nan)
-        .ffill()
-        .fillna(0)
-    )
+    signals["Position"] = position
 
     return signals
